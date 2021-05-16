@@ -14,7 +14,8 @@ i32 main(i32 argc, string[] argv)
 	log2();
 
 	i8[] array = new [5];
-	array[0] = 'b';
+	array[0] = ('b');
 
 	return 0;
 }
+
