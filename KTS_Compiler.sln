@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.31129.286
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KTS_Compiler", "KTS_Compiler\KTS_Compiler.csproj", "{132B6561-DA59-46C8-8AEF-A8631DB95EC6}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{132B6561-DA59-46C8-8AEF-A8631DB95EC6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{132B6561-DA59-46C8-8AEF-A8631DB95EC6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{132B6561-DA59-46C8-8AEF-A8631DB95EC6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{132B6561-DA59-46C8-8AEF-A8631DB95EC6}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {01D3C67A-DD46-44AB-97A4-C1F7AD5C7574}
+	EndGlobalSection
+EndGlobal
