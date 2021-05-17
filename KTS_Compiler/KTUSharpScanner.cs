@@ -15,7 +15,6 @@ namespace KTS_Compiler
             {"false", TokenType.FALSE},
             {"for", TokenType.FOR},
             {"while", TokenType.WHILE},
-            {"print", TokenType.PRINT},
             {"return", TokenType.RETURN},
             {"read", TokenType.READ},
             {"write", TokenType.WRITE},

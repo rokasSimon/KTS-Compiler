@@ -1,21 +1,11 @@
-﻿i8 log(i8 i)
+﻿bool log2()
 {
-	return 'c';
-}
-
-void log2()
-{
-	return;
+	return 1 > 0;
 }
 
 i32 main(i32 argc, string[] argv)
 {
-	i8 x on<any> log = 'a';
-	log2();
-
-	i8[] array = new [5];
-	array[0] = ('b');
+	bool x = log2();
 
 	return 0;
 }
-

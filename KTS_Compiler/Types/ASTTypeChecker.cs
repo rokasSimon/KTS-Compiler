@@ -101,13 +101,40 @@ namespace KTS_Compiler
             TypeSpecifier left = Examine(exp.Left);
             TypeSpecifier right = Examine(exp.Right);
 
-            if (right.ImplicitCastableTo(left))
+            switch (exp.Operator.Type)
             {
-                return left;
-            }
+                case TokenType.PLUS:
+                case TokenType.MINUS:
+                case TokenType.DIV:
+                case TokenType.MULT:
+                case TokenType.PERCENT:
+                    {
+                        if (right.ImplicitCastableTo(left))
+                        {
+                            return left;
+                        }
+                        return TypeSpecifier.Null;
+                    }
+                case TokenType.GREATER:
+                case TokenType.GREATER_EQUAL:
+                case TokenType.LESS:
+                case TokenType.LESS_EQUAL:
+                case TokenType.EQUAL:
+                case TokenType.NOT_EQUAL:
+                    {
+                        if (right.ImplicitCastableTo(left))
+                        {
+                            return new TypeSpecifier { Type = TypeEnum.BOOL, Dimensions = 0 };
+                        }
 
-            Console.WriteLine($"'{left}' is not implicitly castable to '{right}' at line: {exp.Operator.Line}");
-            return TypeSpecifier.Null;
+                        return TypeSpecifier.Null;
+                    }
+                default:
+                    {
+                        Console.WriteLine($"'{left}' is not implicitly castable to '{right}' at line: {exp.Operator.Line}");
+                        return TypeSpecifier.Null;
+                    }
+            }
         }
 
         public bool VisitBlockStatement(Stmt.BlockStatement statement)
