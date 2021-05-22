@@ -32,6 +32,15 @@ namespace KTS_Compiler
                 },
                 VarArgs = true
             });
+            FunctionTable.Add("gets", new FunctionSymbol
+            {
+                ReturnType = new TypeSpecifier { Dimensions = 1, Type = TypeEnum.I8 },
+                Parameters = new List<Parameter>
+                {
+                    new Parameter { Identifier = "printf", Reference = false, Type = new TypeSpecifier { Dimensions = 1, Type = TypeEnum.I8 }}
+                },
+                VarArgs = false
+            });
         }
 
         public void ExecuteTypeCheck()

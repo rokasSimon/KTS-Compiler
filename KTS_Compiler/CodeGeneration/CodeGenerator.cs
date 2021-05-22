@@ -26,14 +26,25 @@ namespace KTS_Compiler.CodeGeneration
             _builder = LLVM.CreateBuilder();
 
             var printf = PrintfPrototype(_module);
+            var gets = GetsPrototype(_module);
+
             _functions.Add("printf", new FunctionSymbol
             {
                 ReturnType = new TypeSpecifier { Dimensions = 0, Type = TypeEnum.I32 },
                 Parameters = new List<Parameter>
                 {
-                    new Parameter { Identifier = "printf", Reference = false, Type = new TypeSpecifier { Dimensions = 2, Type = TypeEnum.I8 }}
+                    new Parameter { Identifier = "printf", Reference = false, Type = new TypeSpecifier { Dimensions = 1, Type = TypeEnum.I8 }}
                 },
                 VarArgs = true
+            });
+            _functions.Add("gets", new FunctionSymbol
+            {
+                ReturnType = new TypeSpecifier { Dimensions = 1, Type = TypeEnum.I8 },
+                Parameters = new List<Parameter>
+                {
+                    new Parameter { Identifier = "gets", Reference = false, Type = new TypeSpecifier { Dimensions = 1, Type = TypeEnum.I8 }}
+                },
+                VarArgs = false
             });
         }
 
@@ -825,30 +836,7 @@ namespace KTS_Compiler.CodeGeneration
                     return vartype;
                 }
 
-                /*LLVMValueRef[] indices = new LLVMValueRef[exprindex.Expressions.Count + 1];
-
-                indices[0] = LLVM.ConstInt(LLVM.Int64Type(), 0, _lFalse);
-
-                for (int i = 1; i < indices.Length; i++)
-                {
-                    var indexType = Visit(exprindex.Expressions[i - 1]);
-                    var indexVal = _valueStack.Pop();
-
-                    var integerIndex = CheckedCast(indexVal, indexType, new TypeSpecifier { Dimensions = 0, Type = TypeEnum.I64 });
-                    indices[i] = integerIndex;
-                }
-
-                var address = LLVM.BuildInBoundsGEP(_builder, variable.Value, indices, "");
-
-                var exprType = Visit(exp.Value);
-                var exprVal = _valueStack.Pop();
-
-                var casted = CheckedCast(exprVal, exprType, vartype);
-
-                LLVMValueRef store = LLVM.BuildStore(_builder, casted, address);
-                _valueStack.Push(store);
-
-                return vartype;*/
+                
             }
             else
             {
