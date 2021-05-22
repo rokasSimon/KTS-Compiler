@@ -11,7 +11,7 @@ namespace KTS_Compiler.CodeGeneration
     {
         public LLVMValueRef Value { get; set; }
         public TypeSpecifier KtsType { get; set; }
-        public bool IsFunction { get; set; }
+        public bool IsDecayed { get; set; }
         public Binding Binding { get; set; }
     }
 }

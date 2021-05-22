@@ -256,6 +256,7 @@ namespace KTS_Compiler
                 result = false;
                 Console.WriteLine("For statement variable identifier already used");
             }
+            LocalTypes.Add(statement.Identifier.Source, statement.TypeSpecifier);
 
             var sg = Examine(statement.RangeExpression.Start);
             if (!sg.IsInt())

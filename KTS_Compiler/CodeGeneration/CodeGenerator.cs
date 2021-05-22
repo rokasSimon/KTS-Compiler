@@ -181,26 +181,6 @@ namespace KTS_Compiler.CodeGeneration
             return _namedValues[exp.Name.Source].KtsType;
         }
 
-        private LLVMValueRef EntryAllocation(LLVMValueRef function, TypeSpecifier type, string name)
-        {
-            var entryBlock = function.GetEntryBasicBlock();
-            var firstInstruction = entryBlock.GetFirstInstruction();
-
-            if (firstInstruction.Pointer == IntPtr.Zero)
-            {
-                LLVM.PositionBuilderAtEnd(_builder, function.GetLastBasicBlock());
-                var alloca = LLVM.BuildAlloca(_builder, GetParameterType(type), name);
-                return alloca;
-            }
-            else
-            {
-                LLVM.PositionBuilderBefore(_builder, function.GetEntryBasicBlock().GetFirstInstruction());
-                var alloca = LLVM.BuildAlloca(_builder, GetParameterType(type), name);
-                LLVM.PositionBuilderAtEnd(_builder, function.GetLastBasicBlock());
-                return alloca;
-            }
-        }
-
         public TypeSpecifier VisitBinaryExpression(Expr.Binary exp)
         {
             TypeSpecifier leftType = Visit(exp.Left);
@@ -429,7 +409,7 @@ namespace KTS_Compiler.CodeGeneration
             currentFunction = new FunctionSymbol { Parameters = stmt.Parameters, ReturnType = stmt.ReturnType };
 
             uint argc = (uint)stmt.Parameters.Count;
-            var argv = new LLVMTypeRef[argc];
+            //var argv = new LLVMTypeRef[argc];
             var function = LLVM.GetNamedFunction(_module, stmt.Identifier.Source);
 
             if (function.Pointer != IntPtr.Zero)
@@ -455,11 +435,16 @@ namespace KTS_Compiler.CodeGeneration
                 var name = stmt.Parameters[i].Identifier;
                 var type = stmt.Parameters[i].Type;
 
-                LLVMValueRef alloca = EntryAllocation(function, type, name);
-
+                var alloca = EntryAllocation(function, type, name);
                 LLVM.BuildStore(_builder, args[i], alloca);
+                bool decayed = false;
 
-                _namedValues.Add(name, new LLVMSymbol { Binding = null, IsFunction = false, KtsType = type, Value = alloca });
+                if (type.Dimensions != 0)
+                {
+                    decayed = true;
+                }
+
+                _namedValues.Add(name, new LLVMSymbol { Binding = null, IsDecayed = decayed, KtsType = type, Value = alloca });
             }
 
             try
@@ -545,11 +530,49 @@ namespace KTS_Compiler.CodeGeneration
             var variable = _namedValues[name];
             var vartype = new TypeSpecifier { Dimensions = 0, Type = variable.KtsType.Type };
 
-            //var type = Visit(exp.Value);
-            //var value = _valueStack.Pop();
-            //var casted = CheckedCast(value, type, vartype);
+            if (variable.IsDecayed)
+            {
+                LLVMValueRef[] indices = new LLVMValueRef[exp.Expressions.Count];
 
-            LLVMValueRef[] indices = new LLVMValueRef[exp.Expressions.Count + 1];
+                for (int i = 0; i < indices.Length; i++)
+                {
+                    var exprType = Visit(exp.Expressions[i]);
+                    var exprVal = _valueStack.Pop();
+
+                    var casted = CheckedCast(exprVal, exprType, new TypeSpecifier { Dimensions = 0, Type = TypeEnum.I64 });
+                    indices[i] = casted;
+                }
+
+                var load = LLVM.BuildLoad(_builder, variable.Value, "");
+                var address = LLVM.BuildInBoundsGEP(_builder, load, indices, "");
+                var loadsec = LLVM.BuildLoad(_builder, address, "");
+                _valueStack.Push(loadsec);
+
+                return vartype;
+            }
+            else
+            {
+                LLVMValueRef[] indices = new LLVMValueRef[exp.Expressions.Count + 1];
+
+                indices[0] = LLVM.ConstInt(LLVM.Int64Type(), 0, _lFalse);
+
+                for (int i = 1; i < indices.Length; i++)
+                {
+                    var exprType = Visit(exp.Expressions[i - 1]);
+                    var exprVal = _valueStack.Pop();
+
+                    var casted = CheckedCast(exprVal, exprType, new TypeSpecifier { Dimensions = 0, Type = TypeEnum.I64 });
+                    indices[i] = casted;
+                }
+
+                var address = LLVM.BuildInBoundsGEP(_builder, variable.Value, indices, "");
+                var load = LLVM.BuildLoad(_builder, address, "");
+                _valueStack.Push(load);
+
+                return vartype;
+            }
+
+            /*LLVMValueRef[] indices = new LLVMValueRef[exp.Expressions.Count + 1];
 
             indices[0] = LLVM.ConstInt(LLVM.Int64Type(), 0, _lFalse);
 
@@ -566,7 +589,7 @@ namespace KTS_Compiler.CodeGeneration
             var load = LLVM.BuildLoad(_builder, address, "");
             _valueStack.Push(load);
 
-            return vartype;
+            return vartype;*/
         }
 
         public TypeSpecifier VisitRangeExpression(Expr.Range exp)
@@ -672,37 +695,6 @@ namespace KTS_Compiler.CodeGeneration
             return null;
         }
 
-        private LLVMValueRef AllocateArray(LLVMValueRef function, TypeSpecifier type, string name, List<Expr> dimensions)
-        {
-            var entryBlock = function.GetEntryBasicBlock();
-            var firstInstruction = entryBlock.GetFirstInstruction();
-
-            LLVMTypeRef arrtype = LLVMPrimitiveType(type.Type);
-
-            for (int i = dimensions.Count - 1; i >= 0; i--)
-            {
-                Expr.Literal lit = (Expr.Literal)dimensions[i];
-                //long l = Convert.ToInt64(lit.Value);
-                uint size = Convert.ToUInt32(lit.Value);
-
-                arrtype = LLVM.ArrayType(arrtype, size);
-            }
-
-            if (firstInstruction.Pointer == IntPtr.Zero)
-            {
-                LLVM.PositionBuilderAtEnd(_builder, function.GetLastBasicBlock());
-                var arrayAlloc = LLVM.BuildAlloca(_builder, arrtype, name);
-                return arrayAlloc;
-            }
-            else
-            {
-                LLVM.PositionBuilderBefore(_builder, firstInstruction);
-                var arrayAlloc = LLVM.BuildAlloca(_builder, arrtype, name);
-                LLVM.PositionBuilderAtEnd(_builder, function.GetLastBasicBlock());
-                return arrayAlloc;
-            }
-        }
-
         public Stmt VisitDeclarationStatement(Stmt.VariableDeclaration statement)
         {
             var function = LLVM.GetBasicBlockParent(LLVM.GetInsertBlock(_builder));
@@ -727,7 +719,7 @@ namespace KTS_Compiler.CodeGeneration
                 alloca = AllocateArray(function, type, name, init.DimensionSizes);
             }
 
-            _namedValues.Add(name, new LLVMSymbol { Binding = statement.Binding, IsFunction = false, KtsType = type, Value = alloca });
+            _namedValues.Add(name, new LLVMSymbol { Binding = statement.Binding, IsDecayed = false, KtsType = type, Value = alloca });
 
             if (statement.Initializer == null)
             {
@@ -765,19 +757,6 @@ namespace KTS_Compiler.CodeGeneration
                 var type = Visit(exp.Value);
                 var value = _valueStack.Pop();
 
-                /*LLVMValueRef deref;
-
-                if (type.Type == TypeEnum.POINTER)
-                {
-                    deref = LLVM.BuildLoad(_builder, value, "");
-                    var exprvar = (Expr.IndexAccess)exp.Value;
-                    type = new TypeSpecifier { Dimensions = 0, Type = _namedValues[exprvar.Identifier.Source].KtsType.Type };
-                }
-                else
-                {
-                    deref = value;
-                }*/
-
                 var casted = CheckedCast(value, type, variable.KtsType);
 
                 var store = LLVM.BuildStore(_builder, casted, variable.Value);
@@ -792,7 +771,61 @@ namespace KTS_Compiler.CodeGeneration
                 var variable = _namedValues[name];
                 var vartype = new TypeSpecifier { Dimensions = 0, Type = variable.KtsType.Type };
 
-                LLVMValueRef[] indices = new LLVMValueRef[exprindex.Expressions.Count + 1];
+                if (variable.IsDecayed)
+                {
+                    LLVMValueRef[] indices = new LLVMValueRef[exprindex.Expressions.Count];
+
+                    for (int i = 0; i < indices.Length; i++)
+                    {
+                        var indexType = Visit(exprindex.Expressions[i]);
+                        var indexVal = _valueStack.Pop();
+
+                        var integerIndex = CheckedCast(indexVal, indexType, new TypeSpecifier { Dimensions = 0, Type = TypeEnum.I64 });
+                        indices[i] = integerIndex;
+                    }
+
+                    var load = LLVM.BuildLoad(_builder, variable.Value, "");
+                    var address = LLVM.BuildInBoundsGEP(_builder, load, indices, "");
+
+                    var exprType = Visit(exp.Value);
+                    var exprVal = _valueStack.Pop();
+
+                    var casted = CheckedCast(exprVal, exprType, vartype);
+
+                    LLVMValueRef store = LLVM.BuildStore(_builder, casted, address);
+                    _valueStack.Push(store);
+
+                    return vartype;
+                }
+                else
+                {
+                    LLVMValueRef[] indices = new LLVMValueRef[exprindex.Expressions.Count + 1];
+
+                    indices[0] = LLVM.ConstInt(LLVM.Int64Type(), 0, _lFalse);
+
+                    for (int i = 1; i < indices.Length; i++)
+                    {
+                        var indexType = Visit(exprindex.Expressions[i - 1]);
+                        var indexVal = _valueStack.Pop();
+
+                        var integerIndex = CheckedCast(indexVal, indexType, new TypeSpecifier { Dimensions = 0, Type = TypeEnum.I64 });
+                        indices[i] = integerIndex;
+                    }
+
+                    var address = LLVM.BuildInBoundsGEP(_builder, variable.Value, indices, "");
+
+                    var exprType = Visit(exp.Value);
+                    var exprVal = _valueStack.Pop();
+
+                    var casted = CheckedCast(exprVal, exprType, vartype);
+
+                    LLVMValueRef store = LLVM.BuildStore(_builder, casted, address);
+                    _valueStack.Push(store);
+
+                    return vartype;
+                }
+
+                /*LLVMValueRef[] indices = new LLVMValueRef[exprindex.Expressions.Count + 1];
 
                 indices[0] = LLVM.ConstInt(LLVM.Int64Type(), 0, _lFalse);
 
@@ -815,7 +848,7 @@ namespace KTS_Compiler.CodeGeneration
                 LLVMValueRef store = LLVM.BuildStore(_builder, casted, address);
                 _valueStack.Push(store);
 
-                return vartype;
+                return vartype;*/
             }
             else
             {
@@ -863,10 +896,55 @@ namespace KTS_Compiler.CodeGeneration
             LLVMValueRef func = LLVM.GetBasicBlockParent(LLVM.GetInsertBlock(_builder));
 
             LLVMBasicBlockRef thenb = LLVM.AppendBasicBlock(func, "then");
-            LLVMBasicBlockRef elseb = LLVM.AppendBasicBlock(func, "else");
+            //LLVMBasicBlockRef elseb = LLVM.AppendBasicBlock(func, "else");
             LLVMBasicBlockRef merge = LLVM.AppendBasicBlock(func, "merge");
 
-            LLVM.BuildCondBr(_builder, condition, thenb, elseb);
+            if (statement.ElseBlock != null)
+            {
+                LLVMBasicBlockRef elseb = LLVM.AppendBasicBlock(func, "else");
+
+                LLVM.BuildCondBr(_builder, condition, thenb, elseb);
+                LLVM.PositionBuilderAtEnd(_builder, thenb);
+
+                Visit(statement.MainBlock);
+
+                LLVM.BuildBr(_builder, merge);
+                thenb = LLVM.GetInsertBlock(_builder);
+
+                LLVM.PositionBuilderAtEnd(_builder, elseb);
+
+                Visit(statement.ElseBlock);
+
+                LLVM.BuildBr(_builder, merge);
+                elseb = LLVM.GetInsertBlock(_builder);
+
+                LLVM.PositionBuilderAtEnd(_builder, merge);
+
+                return null;
+            }
+            else
+            {
+                LLVM.BuildCondBr(_builder, condition, thenb, merge);
+                LLVM.PositionBuilderAtEnd(_builder, thenb);
+
+                Visit(statement.MainBlock);
+
+                LLVM.BuildBr(_builder, merge);
+                thenb = LLVM.GetInsertBlock(_builder);
+
+                //LLVM.PositionBuilderAtEnd(_builder, elseb);
+
+                //Visit(statement.ElseBlock);
+
+                //LLVM.BuildBr(_builder, merge);
+                //elseb = LLVM.GetInsertBlock(_builder);
+
+                LLVM.PositionBuilderAtEnd(_builder, merge);
+
+                return null;
+            }
+
+            /*LLVM.BuildCondBr(_builder, condition, thenb, elseb);
             LLVM.PositionBuilderAtEnd(_builder, thenb);
 
             Visit(statement.MainBlock);
@@ -883,26 +961,59 @@ namespace KTS_Compiler.CodeGeneration
 
             LLVM.PositionBuilderAtEnd(_builder, merge);
 
-            return null;
+            return null;*/
         }
 
-        /*private TypeSpecifier ExtractValue(LLVMValueRef value, TypeSpecifier type, string name)
+        private LLVMValueRef EntryAllocation(LLVMValueRef function, TypeSpecifier type, string name)
         {
-            if (type.Type == TypeEnum.POINTER)
+            var entryBlock = function.GetEntryBasicBlock();
+            var firstInstruction = entryBlock.GetFirstInstruction();
+
+            if (firstInstruction.Pointer == IntPtr.Zero)
             {
-                var variable = _namedValues[name];
-
-                var load = LLVM.BuildLoad(_builder, value, "");
-                _valueStack.Push(load);
-
-                return variable.KtsType;
+                LLVM.PositionBuilderAtEnd(_builder, function.GetLastBasicBlock());
+                var alloca = LLVM.BuildAlloca(_builder, GetParameterType(type), name);
+                return alloca;
             }
             else
             {
-                _valueStack.Push(value);
-                return type;
+                LLVM.PositionBuilderBefore(_builder, function.GetEntryBasicBlock().GetFirstInstruction());
+                var alloca = LLVM.BuildAlloca(_builder, GetParameterType(type), name);
+                LLVM.PositionBuilderAtEnd(_builder, function.GetLastBasicBlock());
+                return alloca;
             }
-        }*/
+        }
+
+        private LLVMValueRef AllocateArray(LLVMValueRef function, TypeSpecifier type, string name, List<Expr> dimensions)
+        {
+            var entryBlock = function.GetEntryBasicBlock();
+            var firstInstruction = entryBlock.GetFirstInstruction();
+
+            LLVMTypeRef arrtype = LLVMPrimitiveType(type.Type);
+
+            for (int i = dimensions.Count - 1; i >= 0; i--)
+            {
+                Expr.Literal lit = (Expr.Literal)dimensions[i];
+                //long l = Convert.ToInt64(lit.Value);
+                uint size = Convert.ToUInt32(lit.Value);
+
+                arrtype = LLVM.ArrayType(arrtype, size);
+            }
+
+            if (firstInstruction.Pointer == IntPtr.Zero)
+            {
+                LLVM.PositionBuilderAtEnd(_builder, function.GetLastBasicBlock());
+                var arrayAlloc = LLVM.BuildAlloca(_builder, arrtype, name);
+                return arrayAlloc;
+            }
+            else
+            {
+                LLVM.PositionBuilderBefore(_builder, firstInstruction);
+                var arrayAlloc = LLVM.BuildAlloca(_builder, arrtype, name);
+                LLVM.PositionBuilderAtEnd(_builder, function.GetLastBasicBlock());
+                return arrayAlloc;
+            }
+        }
 
         private LLVMValueRef CheckedCast(LLVMValueRef value, TypeSpecifier type, TypeSpecifier target)
         {
