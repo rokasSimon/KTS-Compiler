@@ -10,5 +10,6 @@ namespace KTS_Compiler
     {
         public TypeSpecifier ReturnType { get; set; }
         public List<Parameter> Parameters { get; set; }
+        public bool VarArgs { get; set; }
     }
 }

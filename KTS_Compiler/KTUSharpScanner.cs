@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using KTS_Compiler.Extensions;
+using System.Text.RegularExpressions;
 
 namespace KTS_Compiler
 {
@@ -234,7 +235,37 @@ namespace KTS_Compiler
 
         private void HandleChar()
         {
-            if (LookAhead1() == '\'')
+            while (LookAhead1() != '\'' && !EndOfFile())
+            {
+                if (LookAhead1() == '\n')
+                {
+                    Console.WriteLine($"Line {Line}: Newline in char constant");
+                    return;
+                }
+
+                Advance();
+            }
+
+            if (EndOfFile())
+            {
+                Console.WriteLine($"Line {Line}: Unterminated char constant.");
+                return;
+            }
+
+            Advance();
+
+            var str = Source.RangeSubstring(Start + 1, Current - 1);
+            var escaped = Regex.Unescape(str);
+
+            if (escaped.Length > 1)
+            {
+                Console.WriteLine($"Line {Line}: Char constant has more than 1 symbol.");
+                return;
+            }
+
+            AddToken(TokenType.CHAR, escaped[0]);
+
+            /*if (LookAhead1() == '\'')
             {
                 Console.WriteLine($"Line {Line}: Empty char constant.");
                 return;
@@ -269,7 +300,7 @@ namespace KTS_Compiler
 
             Advance();
             Advance();
-            AddToken(TokenType.CHAR, Source[Current - 2]);
+            AddToken(TokenType.CHAR, Source[Current - 2]);*/
         }
 
         private void HandleNumbers()

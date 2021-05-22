@@ -8,6 +8,7 @@ namespace KTS_Compiler
         F32, F64,
         BOOL, STRING, VOID,
         ARRAY,
+        POINTER,
         UNKNOWN
     }
 
@@ -59,6 +60,11 @@ namespace KTS_Compiler
             TypeEnum.F32 or TypeEnum.F64 => true,
             _ => false
         };
+
+        public bool IsBool()
+        {
+            return Type == TypeEnum.BOOL;
+        }
 
         private bool ToInt() => Type switch
         {
@@ -130,17 +136,18 @@ namespace KTS_Compiler
                 return first.Dimensions == other.Dimensions;
             }
 
+            if (first.Type == TypeEnum.STRING && other.Type == TypeEnum.I8 && other.Dimensions == 1
+                || first.Type == TypeEnum.I8 && first.Dimensions == 1 && other.Type == TypeEnum.STRING)
+            {
+                return true;
+            }
+
             return first.Type == other.Type && first.Dimensions == other.Dimensions;
         }
 
         public static bool operator !=(TypeSpecifier first, TypeSpecifier other)
         {
-            if (first.Type == TypeEnum.ARRAY || other.Type == TypeEnum.ARRAY)
-            {
-                return first.Dimensions != other.Dimensions;
-            }
-
-            return first.Type != other.Type || first.Dimensions != other.Dimensions;
+            return !(first == other);
         }
 
         public override bool Equals(object obj)

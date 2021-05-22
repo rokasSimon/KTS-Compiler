@@ -1,11 +1,18 @@
-﻿bool log2()
+﻿i32 main(i32 argc, string[] argv)
 {
-	return 1 > 0;
-}
+	i8[] array = new [6];
 
-i32 main(i32 argc, string[] argv)
-{
-	bool x = log2();
+	array[0] = 'h';
+	array[1] = 'e';
+	array[2] = 'l';
+	array[3] = 'l';
+	array[4] = 'o';
+	array[5] = 0;
+
+	i32 x = 69;
+	x = 420;
+
+	printf("%s %d", array, x);
 
 	return 0;
 }
