@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "KTS_Compiler": {
+      "commandName": "Project",
+      "commandLineArgs": "kts test.kts"
+    }
+  }
+}

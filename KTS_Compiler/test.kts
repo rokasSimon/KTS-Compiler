@@ -1,10 +1,9 @@
 ﻿i32 main(i32 argc, string[] argv)
 {
-	string x = new [50];
+	f64 x;
+	x = 69.9;
 
-	gets(x);
-
-	printf(x);
+	printf("%f", x);
 
 	return 0;
 }

@@ -180,9 +180,15 @@ namespace KTS_Compiler.CodeGeneration
             if (_namedValues.ContainsKey(exp.Name.Source))
             {
                 //_valueStack.Push(_namedValues[exp.Name.Source].Value);
-                var value = _namedValues[exp.Name.Source].Value;
+                var variable = _namedValues[exp.Name.Source];
+                var value = variable.Value;
                 var loadinst = LLVM.BuildLoad(_builder, value, exp.Name.Source);
                 _valueStack.Push(loadinst);
+
+                if (variable.Binding != null)
+                {
+                    HandleBinding(variable, true);
+                }
             }
             else
             {
@@ -351,6 +357,11 @@ namespace KTS_Compiler.CodeGeneration
 
                         var address = LLVM.BuildInBoundsGEP(_builder, variable.Value, indices, "");
                         argv[i] = address;
+
+                        if (variable.Binding != null)
+                        {
+                            HandleBinding(variable, true);
+                        }
                     }
                     else
                     {
@@ -365,7 +376,7 @@ namespace KTS_Compiler.CodeGeneration
                 }
             }
 
-            _valueStack.Push(LLVM.BuildCall(_builder, callfunc, argv, "calltmp"));
+            _valueStack.Push(LLVM.BuildCall(_builder, callfunc, argv, ""));
 
             var funcSignature = _functions[exp.Identifier.Source];
 
@@ -461,6 +472,17 @@ namespace KTS_Compiler.CodeGeneration
             try
             {
                 Visit(stmt.FunctionBody);
+
+                if (stmt.ReturnType.Type == TypeEnum.VOID)
+                {
+                    Stmt.BlockStatement block = (Stmt.BlockStatement)stmt.FunctionBody;
+
+                    var length = block.Statements.Count;
+                    if (block.Statements[length - 1] is not Stmt.Return)
+                    {
+                        LLVM.BuildRetVoid(_builder);
+                    }
+                }
             }
             catch
             {
@@ -579,6 +601,11 @@ namespace KTS_Compiler.CodeGeneration
                 var address = LLVM.BuildInBoundsGEP(_builder, variable.Value, indices, "");
                 var load = LLVM.BuildLoad(_builder, address, "");
                 _valueStack.Push(load);
+
+                if (variable.Binding != null)
+                {
+                    HandleBinding(variable, true);
+                }
 
                 return vartype;
             }
@@ -736,7 +763,14 @@ namespace KTS_Compiler.CodeGeneration
             {
                 if (type.Dimensions == 0)
                 {
-                    LLVM.BuildStore(_builder, LLVM.ConstInt(LLVMPrimitiveType(type.Type), 0, _lFalse), alloca);
+                    if (type.IsFloat())
+                    {
+                        LLVM.BuildStore(_builder, LLVM.ConstReal(LLVMPrimitiveType(type.Type), 0), alloca);
+                    }
+                    else
+                    {
+                        LLVM.BuildStore(_builder, LLVM.ConstInt(LLVMPrimitiveType(type.Type), 0, _lFalse), alloca);
+                    }
                 }
                 else
                 {
@@ -773,11 +807,15 @@ namespace KTS_Compiler.CodeGeneration
                 var store = LLVM.BuildStore(_builder, casted, variable.Value);
                 _valueStack.Push(store);
 
+                if (variable.Binding != null)
+                {
+                    HandleBinding(variable, false);
+                }
+
                 return variable.KtsType;
             }
             else if (exp.Var is Expr.IndexAccess exprindex)
             {
-
                 var name = exprindex.Identifier.Source;
                 var variable = _namedValues[name];
                 var vartype = new TypeSpecifier { Dimensions = 0, Type = variable.KtsType.Type };
@@ -833,10 +871,13 @@ namespace KTS_Compiler.CodeGeneration
                     LLVMValueRef store = LLVM.BuildStore(_builder, casted, address);
                     _valueStack.Push(store);
 
+                    if (variable.Binding != null)
+                    {
+                        HandleBinding(variable, false);
+                    }
+
                     return vartype;
                 }
-
-                
             }
             else
             {
@@ -950,6 +991,51 @@ namespace KTS_Compiler.CodeGeneration
             LLVM.PositionBuilderAtEnd(_builder, merge);
 
             return null;*/
+        }
+
+        private void HandleBinding(LLVMSymbol var, bool fromLoad)
+        {
+            if (fromLoad && var.Binding.Type.Type == TokenType.READ || // read
+                !fromLoad && var.Binding.Type.Type == TokenType.WRITE || // write
+                var.Binding.Type.Type == TokenType.ANY) // any
+            {
+                for (int i = 0; i < var.Binding.Identifiers.Count; i++)
+                {
+                    string funcName = var.Binding.Identifiers[i];
+                    LLVMValueRef func = LLVM.GetNamedFunction(_module, funcName);
+                    LLVMValueRef[] param = func.GetParams();
+
+                    if (param.Length == 0)
+                    {
+                        LLVM.BuildCall(_builder, func, Array.Empty<LLVMValueRef>(), "");
+                        return;
+                    }
+                    else if (param.Length == 1)
+                    {
+                        LLVMValueRef[] args = new LLVMValueRef[1];
+
+                        if (var.KtsType.Dimensions > 0)
+                        {
+                            LLVMValueRef[] indices = new LLVMValueRef[2];
+                            indices[0] = LLVM.ConstInt(LLVM.Int64Type(), 0, _lFalse);
+                            indices[1] = LLVM.ConstInt(LLVM.Int64Type(), 0, _lFalse);
+
+                            var address = LLVM.BuildInBoundsGEP(_builder, var.Value, indices, "");
+                            args[0] = address;
+                        }
+                        else
+                        {
+                            args[0] = LLVM.BuildLoad(_builder, var.Value, "");
+                        }
+
+                        LLVM.BuildCall(_builder, func, args, "");
+                    }
+                    else
+                    {
+                        throw new Exception("Too many parameters in binding function");
+                    }
+                }
+            }
         }
 
         private LLVMValueRef EntryAllocation(LLVMValueRef function, TypeSpecifier type, string name)
@@ -1096,6 +1182,11 @@ namespace KTS_Compiler.CodeGeneration
 
         private static LLVMTypeRef GetParameterType(TypeSpecifier kts)
         {
+            if (kts.Type == TypeEnum.VOID)
+            {
+                return LLVM.VoidType();
+            }
+
             if (kts.Dimensions == 0)
             {
                 return LLVMPrimitiveType(kts.Type);

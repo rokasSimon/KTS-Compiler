@@ -42,8 +42,8 @@ namespace KTS_Compiler
 
         public static TypeEnum FloatFromConst(double d) => d switch
         {
-            var x when x <= Single.MaxValue && x >= Single.MinValue => TypeEnum.I16,
-            var x when x <= Double.MaxValue && x >= Double.MinValue => TypeEnum.I32,
+            var x when x <= Single.MaxValue && x >= Single.MinValue => TypeEnum.F32,
+            var x when x <= Double.MaxValue && x >= Double.MinValue => TypeEnum.F64,
             _ => throw new ArgumentException("Value too large or too small to parse")
         };
 

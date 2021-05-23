@@ -1,55 +1,86 @@
 ﻿using System;
 using System.Diagnostics;
+using System.IO;
+using System.Management.Automation;
+using System.Management.Automation.Runspaces;
+using System.Text;
 using LLVMSharp;
 
 namespace KTS_Compiler
 {
     class Program
     {
-
         // clang -o <exe name> <bitcode file> / generates executable
         static void Main(string[] args)
         {
-            /*var module = LLVM.ModuleCreateWithName("example");
-            var builder = LLVM.CreateBuilder();
-            var printf = PrintfPrototype(module);
-            var main = MainPrototype(module);
-            var gets = GetsPrototype(module);
+            if (args.Length < 2)
+            {
+                Console.WriteLine("| Usage: kts <source filepath> |");
+                return;
+            }
 
-            var block = LLVM.AppendBasicBlock(main, "main");
-            LLVM.PositionBuilderAtEnd(builder, block);
-            //LLVM.InsertIntoBuilder(builder, block);
-            //var hello = LLVM.BuildGlobalStringPtr(builder, "Hello World!\n", "");
-            var readline = LLVM.BuildArrayMalloc(builder, LLVM.Int8Type(), LLVM.ConstInt(LLVM.Int32Type(), 10, new LLVMBool(0)), "");
-            LLVM.BuildCall(builder, gets, new[] { readline }, "");
-            LLVM.BuildCall(builder, printf, new[] { readline }, "");
-            LLVM.BuildFree(builder, readline);
-            var zero = LLVM.ConstInt(LLVM.Int32Type(), 5, new LLVMBool(1));
-            
+            string file = args[1];
 
-            LLVM.PositionBuilderBefore(builder, main.GetEntryBasicBlock().GetFirstInstruction());
-            var intalloc = LLVM.BuildAlloca(builder, LLVM.Int32Type(), "theallocated");
+            var fileinfo = new FileInfo(file);
 
-            LLVM.PositionBuilderAtEnd(builder, main.GetLastBasicBlock());
-            var ret = LLVM.BuildRet(builder, zero);*/
+            if (fileinfo.Exists)
+            {
+                if (Path.GetExtension(file) == ".kts")
+                {
+                    KTUSharpScanner scanner = new KTUSharpScanner(file);
+                    var tokens = scanner.ScanTokens();
+                    KTUSharpParser parser = new KTUSharpParser(tokens);
+                    var statements = parser.ParseTokens();
+                    ASTTypeChecker typeChecker = new ASTTypeChecker(statements);
+                    typeChecker.ExecuteTypeCheck();
 
+                    if (typeChecker.Failed) return;
 
-            string file = "test.kts";
+                    try
+                    {
+                        CodeGeneration.CodeGenerator gen = new CodeGeneration.CodeGenerator(file);
+                        gen.GenerateBitcode(statements);
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine("Crashed from bitcode generation.");
+                        Console.WriteLine(e);
+                    }
 
-            KTUSharpScanner scanner = new KTUSharpScanner(file);
-            var tokens = scanner.ScanTokens();
-            KTUSharpParser parser = new KTUSharpParser(tokens);
-            var statements = parser.ParseTokens();
-            ASTTypeChecker typeChecker = new ASTTypeChecker(statements);
-            typeChecker.ExecuteTypeCheck();
+                    var fileWithoutExt = Path.GetFileNameWithoutExtension(file);
+                    var exeFile = fileWithoutExt + ".exe";
+                    var bitcodeFile = fileWithoutExt + ".bc";
 
-            if (typeChecker.Failed) return;
+                    var powershell = PowerShell.Create();
+                    using var runspace = RunspaceFactory.CreateRunspace();
+                    runspace.Open();
 
-            CodeGeneration.CodeGenerator gen = new CodeGeneration.CodeGenerator(file);
-            gen.GenerateBitcode(statements);
-
-            //string command = $@"clang -o {file[0..^4]} {file}";
-            //System.Diagnostics.Process.Start("CMD.exe", command);
+                    powershell.Runspace = runspace;
+                    string command = $@"clang -o {exeFile} {bitcodeFile}";
+                    powershell.AddScript(command);
+                    var psout = powershell.Invoke();
+                    if (powershell.Streams.Error.Count == 0)
+                    {
+                        var psOutString = new StringBuilder().AppendJoin(Environment.NewLine, psout);
+                        Console.WriteLine(psOutString);
+                    }
+                    else
+                    {
+                        foreach (var err in powershell.Streams.Error)
+                        {
+                            Console.WriteLine(err.ToString());
+                        }
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("| File does not have a .kts extension |");
+                }
+            }
+            else
+            {
+                Console.WriteLine("| Bad source file path given | Maybe use absolute path? |");
+            }
         }
     }
 }
